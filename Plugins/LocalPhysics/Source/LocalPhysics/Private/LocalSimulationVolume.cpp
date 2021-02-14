@@ -124,7 +124,7 @@ void ALocalSimulationVolume::UpdateComponents()
 void ALocalSimulationVolume::SimulatePhysics(float DeltaTime)
 {
 	// todo: update state of dynamic/static objects - i.e. turning on physics or change of mobility will move an static actor to dynamic.
-	LocalSimulation->Simulate(DeltaTime, LocalRotation.RotateVector(LocalSpace->ComponentToWorld.GetRotation().UnrotateVector(Gravity)));
+	LocalSimulation->Simulate(DeltaTime, LocalRotation.RotateVector(LocalSpace->GetComponentTransform().GetRotation().UnrotateVector(Gravity)));
 }
 
 
@@ -161,7 +161,7 @@ void ALocalSimulationVolume::RemoveMeshData()
 		LocalPhysics::FActorHandle* Handle = temp->InHandle;
 
 		// create copy of new position in world
-		const FTransform BodyTransform = Handle->GetWorldTransform() * LocalSpace->ComponentToWorld;
+		const FTransform BodyTransform = Handle->GetWorldTransform() * LocalSpace->GetComponentTransform();
 
 		// store pointer to bodyinstance for later
 		FBodyInstance* BodyInstance = VisualMesh.GetBodyInstance();
@@ -190,8 +190,8 @@ void ALocalSimulationVolume::RemoveMeshData()
 			case ELocalPhysicsBodyType::Dynamic:
 				{
 					// preserve linear / angular velocity for 'local' simulating mesh, and convert it to 'world' space
-					FVector LinearVelocity = LocalSpace->ComponentToWorld.GetRotation().RotateVector(LocalRotation.UnrotateVector(Handle->GetLinearVelocity()));
-					FVector AngularVelocity = LocalSpace->ComponentToWorld.GetRotation().RotateVector(LocalRotation.UnrotateVector(Handle->GetAngularVelocity()));
+					FVector LinearVelocity = LocalSpace->GetComponentTransform().GetRotation().RotateVector(LocalRotation.UnrotateVector(Handle->GetLinearVelocity()));
+					FVector AngularVelocity = LocalSpace->GetComponentTransform().GetRotation().RotateVector(LocalRotation.UnrotateVector(Handle->GetAngularVelocity()));
 
 
 					VisualMesh.SetMobility(EComponentMobility::Movable);
@@ -236,7 +236,7 @@ void ALocalSimulationVolume::UpdateMeshVisuals()
 			case ELocalPhysicsBodyType::Kinematic:
 				{
 					// if we are kinematic, we poll updates back into space
-					Handle.SetWorldTransform(Mesh.ComponentToWorld.GetRelativeTransform(LocalSpace->ComponentToWorld));
+					Handle.SetWorldTransform(Mesh.GetComponentTransform().GetRelativeTransform(LocalSpace->GetComponentTransform()));
 				}
 				break;
 		}
@@ -251,31 +251,32 @@ void ALocalSimulationVolume::UpdateMeshVisuals()
 	}
 }
 
-void ALocalSimulationVolume::Update(FPhysScene* PhysScene, uint32 SceneType, float DeltaTime)
+void ALocalSimulationVolume::Update(FPhysScene* PhysScene, float DeltaTime)
 {
 	// only want synchronous tick
-	if (SceneType == 0)
-	{
+	//if (SceneType == 0)
+	//{
 		// can't simulate without this
-		if (LocalSimulation == nullptr)
-		{
-			return;
-		}
-		// don't simulate if we don't have an Actor Handle
-		if (LocalSimulation->HandleAvailableToSimulate() == false)
-		{
-			return;
-		}
-
-		// process simulation data 
-		SimulatePhysics(DeltaTime);
-
-		// do any early tick removals
-		DeferredRemoval();
-
-		// updates components geoemtry to match rigidbodies
-		UpdateComponents();
+	if (LocalSimulation == nullptr)
+	{
+		return;
 	}
+	// don't simulate if we don't have an Actor Handle
+	if (LocalSimulation->HandleAvailableToSimulate() == false)
+	{
+		return;
+	}
+
+	// process simulation data 
+	SimulatePhysics(DeltaTime);
+
+	// do any early tick removals
+	DeferredRemoval();
+
+	// updates components geoemtry to match rigidbodies
+	UpdateComponents();
+
+	//}
 }
 
 // We listen on Kinematic meshes, as this is called when you SetComponentTransform (and children)
@@ -298,7 +299,7 @@ void ALocalSimulationVolume::TransformUpdated(USceneComponent* InRootComponent, 
 					const FTransform& WorldBodyTransform = Mesh.GetComponentTransform();
 
 					// Kinematic update for our physics in 'local' space
-					Handle.SetWorldTransform(WorldBodyTransform.GetRelativeTransform(LocalSpace->ComponentToWorld));
+					Handle.SetWorldTransform(WorldBodyTransform.GetRelativeTransform(LocalSpace->GetComponentTransform()));
 
 					// let's show everything in simulation.
 					if (bShowDebugPhyics)
@@ -388,7 +389,7 @@ bool ALocalSimulationVolume::AddStaticMeshToSimulation(UStaticMeshComponent* Mes
 		}
 
 		// Scene Lock for Multi-Threading
-		PxScene* SyncScene = PhysScene->GetPhysXScene(PST_Sync);
+		PxScene* SyncScene = PhysScene->GetPxScene();
 		SCOPED_SCENE_WRITE_LOCK(SyncScene); //SCOPED_SCENE_WRITE_LOCK or SCOPED_SCENE_READ_LOCK if you only need to read
 
 		// default is Dynamic, other checks will override this default if they're true.
@@ -434,7 +435,7 @@ bool ALocalSimulationVolume::AddStaticMeshToSimulation(UStaticMeshComponent* Mes
 		{
 			case ELocalPhysicsBodyType::Kinematic:
 				{
-					auto kinematicBody = BodyInstance.GetPxRigidBody_AssumesLocked();
+					auto kinematicBody = FPhysicsInterface_PhysX::GetPxRigidBody_AssumesLocked(BodyInstance.GetPhysicsActorHandle());
 					if (kinematicBody == nullptr)
 					{
 						return false;
@@ -449,7 +450,7 @@ bool ALocalSimulationVolume::AddStaticMeshToSimulation(UStaticMeshComponent* Mes
 				break;
 			case ELocalPhysicsBodyType::Static:
 				{
-					auto staticBody = BodyInstance.GetPxRigidBody_AssumesLocked();
+				auto staticBody = FPhysicsInterface_PhysX::GetPxRigidBody_AssumesLocked(BodyInstance.GetPhysicsActorHandle());
 					if (staticBody == nullptr)
 					{
 						return false;
@@ -462,7 +463,7 @@ bool ALocalSimulationVolume::AddStaticMeshToSimulation(UStaticMeshComponent* Mes
 				break;
 			case ELocalPhysicsBodyType::Dynamic:
 				{
-					auto dynamicBody = BodyInstance.GetPxRigidDynamic_AssumesLocked();
+					auto dynamicBody = FPhysicsInterface_PhysX::GetPxRigidDynamic_AssumesLocked(BodyInstance.GetPhysicsActorHandle());
 					if (dynamicBody == nullptr)
 					{
 						return false;
@@ -480,8 +481,8 @@ bool ALocalSimulationVolume::AddStaticMeshToSimulation(UStaticMeshComponent* Mes
 
 					if (bConvertVelocity)
 					{
-						NewMeshData->InHandle->SetLinearVelocity(LocalRotation.RotateVector(LocalSpace->ComponentToWorld.GetRotation().UnrotateVector(LinearVelocity)));
-						NewMeshData->InHandle->SetAngularVelocity(LocalRotation.RotateVector(LocalSpace->ComponentToWorld.GetRotation().UnrotateVector(AngularVelocity)));
+						NewMeshData->InHandle->SetLinearVelocity(LocalRotation.RotateVector(LocalSpace->GetComponentTransform().GetRotation().UnrotateVector(LinearVelocity)));
+						NewMeshData->InHandle->SetAngularVelocity(LocalRotation.RotateVector(LocalSpace->GetComponentTransform().GetRotation().UnrotateVector(AngularVelocity)));
 					}
 				}
 				break;
@@ -523,11 +524,14 @@ bool ALocalSimulationVolume::AddConstraintToStaticMeshes(UStaticMeshComponent* M
 
 		LocalPhysics::LocalPhysicJointData* newData = new LocalPhysicJointData(*LocalSimulation, { MeshDataOne, MeshDataTwo }, nullptr, { MeshDataOne->InBodyType, MeshDataTwo->InBodyType });
 		
+
 		PxD6Joint* PD6Joint = PxD6JointCreate(*GPhysXSDK, nullptr, PxTransform(PxIdentity), nullptr, U2PTransform(ActorTwo->GetBodyTransform().GetRelativeTransform(ActorOne->GetBodyTransform())));
 		
+		
+
 		if(PD6Joint)
-		{
-			ConstraintProfile.ProfileInstance.UpdatePhysX_AssumesLocked(PD6Joint, (ActorOne->GetInverseMass() + ActorTwo->GetInverseMass() / 2), 1.f);
+		{														   //ConstraintProfile.GetPhysicsConstraintRef() ?
+			ConstraintProfile.ProfileInstance.Update_AssumesLocked(FPhysxUserData::Get<FConstraintInstance>(PD6Joint->userData)->ConstraintHandle, (ActorOne->GetInverseMass() + ActorTwo->GetInverseMass() / 2), 1.f);
 
 			newData->JointHandle = LocalSimulation->CreateJoint(PD6Joint, ActorOne, ActorTwo);
 

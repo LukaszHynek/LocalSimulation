@@ -151,7 +151,7 @@ private:
 	void UpdateMeshVisuals();
 
 	// Use to simulate along with PhysScene
-	void Update(FPhysScene* PhysScene, uint32 SceneType, float DeltaTime);
+	void Update(FPhysScene* PhysScene, float DeltaTime);
 
 	// Used to update Kinematic actors within Local Simulation
 	void TransformUpdated(USceneComponent* InRootComponent, EUpdateTransformFlags UpdateTransformFlags, ETeleportType Teleport) const;
