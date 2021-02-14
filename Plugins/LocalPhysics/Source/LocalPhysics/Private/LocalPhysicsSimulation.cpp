@@ -112,7 +112,7 @@ void FLocalSimulation::RemoveActor(FActorHandle* Handle)
 		// store ref to index, swap with last (should move to apporpiate position to maintain sorting)
 		auto index = Handle->ActorDataIndex;
 
-		// if we have mroe than 1 actor, swap positions to keep maintian sorting todo: sorting lol
+		// if we have more than 1 actor, swap positions to keep maintian sorting todo: sorting lol
 		if(ActorHandles.Num() > 1)
 		{
 			if (ActorHandles[ActorHandles.Num() - 1] != nullptr)
@@ -130,6 +130,7 @@ void FLocalSimulation::RemoveActor(FActorHandle* Handle)
 		auto temp = ActorHandles[Handle->ActorDataIndex];
 
 		// remove from handles (only removes it from array)
+		Actors.RemoveAt(Handle->ActorDataIndex);
 		ActorHandles.Remove(Handle);
 		RigidBodiesData.RemoveAt(index);
 		SolverBodiesData.RemoveAt(index);
@@ -143,17 +144,20 @@ void FLocalSimulation::RemoveActor(FActorHandle* Handle)
 				break;
 			case 1:
 				// remove from simulated bodies to maintain accurate count
-				--NumSimulatedBodies;
+				--NumKinematicBodies;
 				break;
 			case 2:
 				// remove from kinematic bodies to maintain accurate count
-				--NumKinematicBodies;
+				--NumSimulatedBodies;
 				break;
 		}
 
 		// mark flags as dirty to resort joint/actor cache
 		bDirtyJointData = true;
 		bRecreateIterationCache = true;
+
+		UE_LOG(LogTemp, Log, L"Remove Actor complete, Actors.Num(): %i  ActorHandles.Num(): %i", Actors.Num(), ActorHandles.Num());
+
 
 		delete temp;
 	}
@@ -193,7 +197,7 @@ void FLocalSimulation::RemoveJoint(FJointHandle* Handle)
 }
 
 template <FLocalSimulation::ECreateActorType ActorType>
-uint32 FLocalSimulation:: CreateActor(PxRigidActor* RigidActor, const FTransform& WorldTM)
+uint32 FLocalSimulation::CreateActor(PxRigidActor* RigidActor, const FTransform& WorldTM)
 {
 	bDirtyJointData = true;	//new entity potentially re-orders bodies so joint data becomes stale. TODO: can this be optimized for adding static cases that don't re-order?
 	bRecreateIterationCache = true;	//new entity potentially re-orders bodies so our iteration cache becomes stale. TODO: can this be optimized for adding static cases that don't re-order?
@@ -203,6 +207,7 @@ uint32 FLocalSimulation:: CreateActor(PxRigidActor* RigidActor, const FTransform
 
 	FActorHandle* NewActorHandle = new FActorHandle(*this, ActorDataIndex);
 	ActorHandles.Add(NewActorHandle);
+
 
 	PxSolverBodyData* NewSolverBodyData = new (SolverBodiesData) PxSolverBodyData();
 	immediate::PxRigidBodyData* NewRigidBodyData = new (RigidBodiesData) immediate::PxRigidBodyData();
@@ -277,6 +282,9 @@ uint32 FLocalSimulation:: CreateActor(PxRigidActor* RigidActor, const FTransform
 
 	// very poor way of setitng this up.
 	NewActorHandle->rigidBodyType = (int)ActorType;
+
+	UE_LOG(LogTemp, Log, L"Create Actor complete, Actors.Num(): %i  ActorHandles.Num(): %i", Actors.Num(), ActorHandles.Num());
+
 	return NewActorHandle->ActorDataIndex;
 }
 
