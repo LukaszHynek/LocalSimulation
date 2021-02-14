@@ -530,8 +530,8 @@ bool ALocalSimulationVolume::AddConstraintToStaticMeshes(UStaticMeshComponent* M
 		
 
 		if(PD6Joint)
-		{														   //ConstraintProfile.GetPhysicsConstraintRef() ?
-			ConstraintProfile.ProfileInstance.Update_AssumesLocked(FPhysxUserData::Get<FConstraintInstance>(PD6Joint->userData)->ConstraintHandle, (ActorOne->GetInverseMass() + ActorTwo->GetInverseMass() / 2), 1.f);
+		{
+			ConstraintProfile.ProfileInstance.Update_AssumesLocked(ConstraintProfile.GetPhysicsConstraintRef(), (ActorOne->GetInverseMass() + ActorTwo->GetInverseMass() / 2), 1.f);
 
 			newData->JointHandle = LocalSimulation->CreateJoint(PD6Joint, ActorOne, ActorTwo);
 

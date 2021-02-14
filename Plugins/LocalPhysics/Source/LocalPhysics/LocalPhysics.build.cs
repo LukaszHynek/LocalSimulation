@@ -13,6 +13,7 @@ public class LocalPhysics: ModuleRules
                 "Engine",
                 "AnimGraphRuntime",
                 "PhysX",
+                "PhysicsCore",
                 "APEX"  //This is not really needed, but the includes are all coupled. Not really an issue at the moment, could be broken out in the future
 
 			}
